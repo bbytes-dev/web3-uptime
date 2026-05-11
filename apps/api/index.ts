@@ -1,9 +1,11 @@
 import express from "express";
+import cors from "cors";
 import { authMiddleware } from "./middleware";
 import { prismaClient } from "db/client";
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -35,8 +37,8 @@ app.get("/api/v1/websites/status", authMiddleware, async (req, res) => {
     where: {
       id: websiteId as string,
       userId,
-      disabled:false
-    },include :{
+      disabled: false
+    }, include: {
       ticks: true
     }
   })
@@ -45,21 +47,34 @@ app.get("/api/v1/websites/status", authMiddleware, async (req, res) => {
 
 });
 
-app.get("/api/v1/websites", authMiddleware, async(req, res) => {
+app.get("/api/v1/websites", authMiddleware, async (req, res) => {
   const userId = req.userId!;
-  const data = await prismaClient.website.findMany({
-    where: {
-      userId,
-      disabled:false
-    }
-  })
-  res.json(data)
+  try {
+    const data = await prismaClient.website.findMany({
+      where: {
+        userId,
+        disabled: false
+      },
+      include: {
+        ticks: true
+      }
+    })
+    res.json(data)
+  } catch (err: any) {
+    console.error("FULL ERROR:", JSON.stringify({
+      message: err.message,
+      code: err.code,
+      meta: err.meta,
+      name: err.name
+    }, null, 2));
+    res.status(500).json({ error: err.message })
+  }
 });
 
 
 app.delete("/api/v1/website", authMiddleware, async (req, res) => {
   const userId = req.userId!;
-const websiteId = req.query.websiteId as string;
+  const websiteId = req.query.websiteId as string;
   const data = await prismaClient.website.update({
     where: {
       userId,
@@ -69,7 +84,7 @@ const websiteId = req.query.websiteId as string;
       disabled: true
     }
   })
-  res.json({message: "Website deleted successfully"})
+  res.json({ message: "Website deleted successfully" })
 });
 
 app.get("/health", (req, res) => {

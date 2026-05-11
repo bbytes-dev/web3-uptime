@@ -39,9 +39,9 @@ export default function DashboardPage() {
   const { websites } = useWebsites();
   const { getToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "up" | "down"
-  >("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "up" | "down">(
+    "all",
+  );
   const [newUrl, setNewUrl] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -66,8 +66,7 @@ export default function DashboardPage() {
         .includes(searchQuery.toLowerCase());
       if (filterStatus === "all") return matchesSearch;
       const isUp =
-        w.ticks.length === 0 ||
-        w.ticks[w.ticks.length - 1]?.status === "Good";
+        w.ticks.length === 0 || w.ticks[w.ticks.length - 1]?.status === "Good";
       if (filterStatus === "up") return matchesSearch && isUp;
       return matchesSearch && !isUp;
     });
@@ -81,7 +80,7 @@ export default function DashboardPage() {
       await axios.post(
         `${API_URL}/api/v1/website`,
         { url: newUrl },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setNewUrl("");
       setDialogOpen(false);
@@ -115,11 +114,9 @@ export default function DashboardPage() {
             </p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-md shadow-purple-600/20">
-                <Plus className="h-4 w-4" />
-                Add Monitor
-              </Button>
+            <DialogTrigger className="inline-flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-md shadow-purple-600/20 px-4 py-2 text-sm font-medium transition-colors cursor-pointer">
+              <Plus className="h-4 w-4" />
+              Add Monitor
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -135,13 +132,13 @@ export default function DashboardPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleAddMonitor()}
               />
               <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
+                <DialogClose className="inline-flex items-center justify-center rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
+                  Cancel
                 </DialogClose>
-                <Button
+                <button
                   onClick={handleAddMonitor}
                   disabled={isAdding || !newUrl.trim()}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  className="inline-flex items-center justify-center rounded-lg bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAdding ? (
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -149,7 +146,7 @@ export default function DashboardPage() {
                     <Plus className="h-4 w-4 mr-2" />
                   )}
                   {isAdding ? "Adding..." : "Add Monitor"}
-                </Button>
+                </button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -300,9 +297,7 @@ function MonitorCard({
   onDelete: (id: string) => void;
 }) {
   const lastTick =
-    website.ticks.length > 0
-      ? website.ticks[website.ticks.length - 1]
-      : null;
+    website.ticks.length > 0 ? website.ticks[website.ticks.length - 1] : null;
   const isUp = !lastTick || lastTick.status === "Good";
 
   // Calculate uptime percentage
@@ -315,7 +310,7 @@ function MonitorCard({
   // Calculate average response time
   const avgResponse = useMemo(() => {
     const validTicks = website.ticks.filter(
-      (t) => t.status === "Good" && t.latency > 0
+      (t) => t.status === "Good" && t.latency > 0,
     );
     if (validTicks.length === 0) return "0.00";
     const avg =

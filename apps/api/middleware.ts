@@ -1,13 +1,17 @@
-import { clerkMiddleware, requireAuth } from '@clerk/express';
+import { clerkMiddleware, getAuth } from '@clerk/express';
 import type { Request, Response, NextFunction } from 'express';
 
 export const authMiddleware = [
   clerkMiddleware(),
-  requireAuth(),
-  
-  // Map the Clerk auth object to the custom req.userId property expected by the API
+
+  // Verify auth and map Clerk userId to req.userId
   (req: Request, res: Response, next: NextFunction) => {
-    req.userId = (req as any).auth.userId;
+    const auth = getAuth(req);
+    if (!auth?.userId) {
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
+    }
+    req.userId = auth.userId;
     next();
   }
 ];

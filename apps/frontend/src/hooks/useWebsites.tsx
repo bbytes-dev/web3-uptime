@@ -41,5 +41,5 @@ export function useWebsites() {
     return () => clearInterval(interval);
   }, [getToken]);
 
-  return { websites };
+  return { websites, refreshWebsite };
 }
