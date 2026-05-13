@@ -1,16 +1,21 @@
 import { randomUUIDv7, type ServerWebSocket } from "bun";
 import { prismaClient } from "db/client";
 import nacl from "tweetnacl";
+import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import {
   type IncomingMessage,
-  type OutgoingMessage,
-  SIGNING_PREFIX,
   type SignupIncomingMessage,
   WebsiteStatus,
   getLocationFromIP,
 } from "common";
 import nacl_util from "tweetnacl-util";
+
+const COST_PER_VALIDATION = 1;
+
+const CALLBACKS: {
+  [callbackId: string]: (data: IncomingMessage) => void;
+} = {};
 
 const PORT = Number(process.env.HUB_PORT) || 8081;
 
@@ -46,14 +51,23 @@ Bun.serve({
             await handleSignup(ws, payload.data);
           }
         } else if (payload.type === "validate") {
-          //   await handleValidate(ws, payload.data);
+          const callbackId = payload.data.callbackId;
+          if (CALLBACKS[callbackId]) {
+            CALLBACKS[callbackId](payload);
+            delete CALLBACKS[callbackId];
+          }
         }
       } catch (err) {
         console.error("Hub Error:", err);
       }
     },
     close(ws) {
-      console.log("🔌 Validator disconnected");
+      const index = availableValidators.findIndex((v) => v.socket === ws);
+      if (index !== -1) {
+        const v = availableValidators[index];
+        console.log(`🔌 Validator disconnected: ${v?.validatorId}`);
+        availableValidators.splice(index, 1);
+      }
     },
   },
 });
@@ -121,7 +135,7 @@ async function handleSignup(
 
 function verifyMessage(message: string, publicKey: string, signature: string) {
   const messageBytes = nacl_util.decodeUTF8(message);
-  const publicKeyBytes = nacl_util.decodeBase64(publicKey);
+  const publicKeyBytes = bs58.decode(publicKey);
   const signatureBytes = new Uint8Array(JSON.parse(signature));
 
   return nacl.sign.detached.verify(
@@ -130,3 +144,63 @@ function verifyMessage(message: string, publicKey: string, signature: string) {
     publicKeyBytes,
   );
 }
+
+setInterval(async () => {
+  const websitesToMonitor = await prismaClient.website.findMany({
+    where: {
+      disabled: false,
+    },
+  });
+
+  for (const website of websitesToMonitor) {
+    availableValidators.forEach((validator) => {
+      const callbackId = randomUUIDv7();
+      console.log(
+        `Sending validate to ${validator.validatorId} ${website.url}`,
+      );
+      validator.socket.send(
+        JSON.stringify({
+          type: "validate",
+          data: {
+            url: website.url,
+            callbackId,
+            websiteId: website.id,
+          },
+        }),
+      );
+
+      CALLBACKS[callbackId] = async (data: IncomingMessage) => {
+        if (data.type === "validate") {
+          const { validatorId, status, latency, signedMessage } = data.data;
+          const verified = await verifyMessage(
+            `Replying to ${callbackId}`,
+            validator.publicKey,
+            signedMessage,
+          );
+          if (!verified) {
+            return;
+          }
+
+          await prismaClient.$transaction(async (tx) => {
+            await tx.webSiteUptimeStatus.create({
+              data: {
+                websiteId: website.id,
+                validatorId,
+                status: status as WebsiteStatus,
+                latency,
+                createdAt: new Date(),
+              },
+            });
+
+            await tx.validator.update({
+              where: { id: validatorId },
+              data: {
+                pendingPayouts: { increment: COST_PER_VALIDATION },
+              },
+            });
+          });
+        }
+      };
+    });
+  }
+}, 60 * 1000);
