@@ -61,6 +61,7 @@ async function main() {
         publicKey: "val_us_east_0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
         ipAddress: "54.210.123.45",
         location: "US-East (Virginia)",
+        pendingPayouts: Math.floor(Math.random() * 1000),
       },
     }),
     prisma.validator.create({
@@ -68,6 +69,7 @@ async function main() {
         publicKey: "val_eu_west_0x2b3c4d5e6f7890abcdef1234567890abcdef1234",
         ipAddress: "52.48.67.89",
         location: "EU-West (Ireland)",
+        pendingPayouts: Math.floor(Math.random() * 1000),
       },
     }),
     prisma.validator.create({
@@ -75,6 +77,7 @@ async function main() {
         publicKey: "val_ap_south_0x3c4d5e6f7890abcdef1234567890abcdef123456",
         ipAddress: "13.234.56.78",
         location: "AP-South (Mumbai)",
+        pendingPayouts: Math.floor(Math.random() * 1000),
       },
     }),
     prisma.validator.create({
@@ -83,6 +86,7 @@ async function main() {
         ipAddress: "18.162.34.56",
         location: "AP-East (Tokyo)",
         isActive: false,
+        pendingPayouts: Math.floor(Math.random() * 500),
       },
     }),
   ]);
@@ -108,11 +112,17 @@ async function main() {
         status = Math.random() < 0.03 ? "Bad" : "Good";
       }
 
+      // Random latency between 50ms and 2000ms
+      const latency = status === "Good" 
+        ? Math.random() * 400 + 50 
+        : 0;
+
       await prisma.webSiteUptimeStatus.create({
         data: {
           websiteId: website.id,
           validatorId: validator.id,
           status,
+          latency,
           createdAt: tickTime,
         },
       });

@@ -3,7 +3,6 @@
 import { useWebsites } from "@/hooks/useWebsites";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +94,6 @@ export default function DashboardPage() {
   };
 
   return (
-    <TooltipProvider delayDuration={100}>
       <div className="min-h-[calc(100vh-4rem)] bg-background">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Page Header */}
@@ -191,7 +189,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-    </TooltipProvider>
   );
 }
 
@@ -266,25 +263,23 @@ function MonitorRow({
         <div className="flex gap-[1.5px] h-8 items-stretch">
           {allTicks.length > 0 ? (
             allTicks.map((tick) => (
-              <Tooltip key={tick.id}>
-                <TooltipTrigger asChild>
-                  <div
-                    className={`flex-1 rounded-[2px] min-w-[2px] cursor-pointer transition-all duration-150 hover:scale-y-110 hover:brightness-110 ${
-                      tick.status === "Good"
-                        ? "bg-emerald-500 hover:bg-emerald-400"
-                        : "bg-rose-500 hover:bg-rose-400"
-                    }`}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
+              <div key={tick.id} className="flex-1 min-w-[2px] relative group/tick">
+                <div
+                  className={`h-full w-full rounded-[2px] cursor-pointer transition-all duration-150 group-hover/tick:scale-y-110 group-hover/tick:brightness-110 ${
+                    tick.status === "Good"
+                      ? "bg-emerald-500 group-hover/tick:bg-emerald-400"
+                      : "bg-rose-500 group-hover/tick:bg-rose-400"
+                  }`}
+                />
+                {/* CSS Tooltip */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-md bg-popover border border-border shadow-lg text-xs whitespace-nowrap opacity-0 pointer-events-none group-hover/tick:opacity-100 transition-opacity duration-150 z-50">
                   <div className="flex flex-col gap-0.5">
                     <span className="font-medium">{tick.status === "Good" ? "✓ Operational" : "✗ Down"}</span>
-                    <span className="text-muted-foreground">
-                      {new Date(tick.createdAt).toLocaleString()}
-                    </span>
+                    <span className="text-muted-foreground">{new Date(tick.createdAt).toLocaleString()}</span>
                   </div>
-                </TooltipContent>
-              </Tooltip>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] w-2 h-2 rotate-45 bg-popover border-r border-b border-border" />
+                </div>
+              </div>
             ))
           ) : (
             <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground rounded-md bg-muted/30 border border-dashed border-border">

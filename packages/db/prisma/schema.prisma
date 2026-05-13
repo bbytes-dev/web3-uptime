@@ -28,12 +28,13 @@ model Website {
 }
 
 model Validator {
-  id        String                @id @default(uuid())
-  publicKey String                @unique
-  ipAddress String
-  location  String
-  isActive  Boolean               @default(true)
-  ticks     WebSiteUptimeStatus[]
+  id             String                @id @default(uuid())
+  publicKey      String                @unique
+  ipAddress      String
+  location       String
+  isActive       Boolean               @default(true)
+  ticks          WebSiteUptimeStatus[]
+  pendingPayouts Int                   @default(0)
 }
 
 model WebSiteUptimeStatus {
@@ -41,6 +42,7 @@ model WebSiteUptimeStatus {
   websiteId   String
   validatorId String
   status      WebsiteStatus
+  latency     Float
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   website     Website       @relation(fields: [websiteId], references: [id])

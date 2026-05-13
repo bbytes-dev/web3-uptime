@@ -8,5 +8,12 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "bs58": "^6.0.0",
+    "common": "workspace:*",
+    "db": "workspace:*",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
   }
 }

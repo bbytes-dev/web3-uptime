@@ -16,6 +16,7 @@ CREATE TABLE "Website" (
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "disabled" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Website_pkey" PRIMARY KEY ("id")
 );
@@ -27,6 +28,7 @@ CREATE TABLE "Validator" (
     "ipAddress" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "pendingPayouts" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "Validator_pkey" PRIMARY KEY ("id")
 );
@@ -37,6 +39,7 @@ CREATE TABLE "WebSiteUptimeStatus" (
     "websiteId" TEXT NOT NULL,
     "validatorId" TEXT NOT NULL,
     "status" "WebsiteStatus" NOT NULL,
+    "latency" DOUBLE PRECISION NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
