@@ -26,14 +26,14 @@ function ButtonGroup({
   className,
   orientation,
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>) {
+}: { className?: string; orientation?: any; [key: string]: any }) {
   return (
     <div
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
       className={cn(buttonGroupVariants({ orientation }), className)}
-      {...props}
+      {...(props as any)}
     />
   )
 }

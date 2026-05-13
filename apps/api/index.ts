@@ -87,6 +87,32 @@ app.delete("/api/v1/website", authMiddleware, async (req, res) => {
   res.json({ message: "Website deleted successfully" })
 });
 
+app.get("/api/v1/validators", async (req, res) => {
+  try {
+    const validators = await prismaClient.validator.findMany({
+      select: {
+        id: true,
+        publicKey: true,
+        location: true,
+        isActive: true,
+        pendingPayouts: true,
+        totalPayouts: true,
+        lastPayoutTx: true,
+        _count: {
+          select: { ticks: true }
+        }
+      },
+      orderBy: {
+        totalPayouts: "desc"
+      }
+    });
+    res.json(validators);
+  } catch (err: any) {
+    console.error("Validators Fetch Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/health", (req, res) => {
   res.send("OK");
 });

@@ -35,6 +35,8 @@ model Validator {
   isActive       Boolean               @default(true)
   ticks          WebSiteUptimeStatus[]
   pendingPayouts Int                   @default(0)
+  totalPayouts   Int                   @default(0)
+  lastPayoutTx   String?
 }
 
 model WebSiteUptimeStatus {
