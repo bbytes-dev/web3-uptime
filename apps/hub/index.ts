@@ -6,13 +6,21 @@ import {
   type IncomingMessage,
   type OutgoingMessage,
   SIGNING_PREFIX,
+  type SignupIncomingMessage,
   WebsiteStatus,
+  getLocationFromIP,
 } from "common";
 import nacl_util from "tweetnacl-util";
 
 const PORT = Number(process.env.HUB_PORT) || 8081;
 
 console.log(`Starting Hub on port ${PORT}`);
+
+const availableValidators: {
+  validatorId: string;
+  socket: ServerWebSocket<unknown>;
+  publicKey: string;
+}[] = [];
 
 Bun.serve({
   port: PORT,
@@ -50,57 +58,68 @@ Bun.serve({
   },
 });
 
-async function handleSignup(ws: ServerWebSocket<any>, data: any) {
+async function handleSignup(
+  ws: ServerWebSocket<any>,
+  data: SignupIncomingMessage,
+) {
   const { publicKey, ip, signedMessage, callbackId } = data;
 
   try {
-    // Verify signature
-    // Message signed: "web3-uptime-validate:<callbackId>"
-    const message = new TextEncoder().encode(`${SIGNING_PREFIX}${callbackId}`);
-    const signature = bs58.decode(signedMessage);
-    const pubKeyBytes = bs58.decode(publicKey);
+    const validatorDb = await prismaClient.validator.findFirst({
+      where: { publicKey },
+    });
 
-    const isValid = nacl.sign.detached.verify(message, signature, pubKeyBytes);
+    if (validatorDb) {
+      ws.send(
+        JSON.stringify({
+          type: "signup",
+          data: {
+            validatorId: validatorDb.id,
+            callbackId,
+          },
+        }),
+      );
 
-    if (!isValid) {
-      console.warn(`Invalid signup signature from ${publicKey}`);
+      availableValidators.push({
+        validatorId: validatorDb.id,
+        socket: ws,
+        publicKey,
+      });
       return;
     }
 
-    // Create or update validator in DB
-    const validator = await prismaClient.validator.upsert({
-      where: { publicKey },
-      update: { ipAddress: ip, isActive: true },
-      create: {
+    const location = await getLocationFromIP(ip);
+
+    const validator = await prismaClient.validator.create({
+      data: {
         publicKey,
         ipAddress: ip,
-        location: "Auto-detected", // In a real app, use GeoIP
+        location,
         isActive: true,
-        pendingPayouts: 0,
       },
     });
 
-    console.log(`Validator registered: ${publicKey.slice(0, 8)}...`);
+    ws.send(
+      JSON.stringify({
+        type: "signup",
+        data: {
+          validatorId: validator.id,
+          callbackId,
+        },
+      }),
+    );
 
-    const response: OutgoingMessage = {
-      type: "signup",
-      data: {
-        validatorId: validator.id,
-        callbackId,
-      },
-    };
-
-    ws.send(JSON.stringify(response));
+    availableValidators.push({
+      validatorId: validator.id,
+      socket: ws,
+      publicKey: validator.publicKey,
+    });
   } catch (err) {
     console.error("Signup failed:", err);
   }
 }
 
-function verifyMessage(
-  message: string,
-  publicKey: string,
-  signature: string,
-) {
+function verifyMessage(message: string, publicKey: string, signature: string) {
   const messageBytes = nacl_util.decodeUTF8(message);
   const publicKeyBytes = nacl_util.decodeBase64(publicKey);
   const signatureBytes = new Uint8Array(JSON.parse(signature));

@@ -19,9 +19,7 @@ export function isValidPublicKey(key: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(key);
 }
 
-export function calculateUptimePercent(
-  ticks: { status: string }[]
-): number {
+export function calculateUptimePercent(ticks: { status: string }[]): number {
   if (ticks.length === 0) return 0;
   const good = ticks.filter((t) => t.status === "Good").length;
   return (good / ticks.length) * 100;
@@ -37,4 +35,29 @@ export function formatTimeAgo(dateStr: string | Date): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+export async function getLocationFromIP(ip: string): Promise<string> {
+  try {
+    if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.")) {
+      return "Local / Dev Instance";
+    }
+
+    const response = await fetch(
+      `http://ip-api.com/json/${ip}?fields=status,city,country`,
+    );
+    const data = (await response.json()) as {
+      status: string;
+      city: string;
+      country: string;
+    };
+
+    if (data.status === "success") {
+      return `${data.city}, ${data.country}`;
+    }
+    return "Unknown Location";
+  } catch (err) {
+    console.error("GeoIP lookup failed:", err);
+    return "Unknown Location";
+  }
 }
