@@ -4,15 +4,21 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/node": "^25.7.0",
+    "@types/ws": "^8.18.1"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
+    "boxen": "8",
+    "chalk": "5",
     "common": "workspace:*",
+    "ora": "8",
     "tweetnacl": "^1.0.3",
-    "tweetnacl-util": "^0.15.1"
+    "tweetnacl-util": "^0.15.1",
+    "ws": "^8.20.1"
   }
 }

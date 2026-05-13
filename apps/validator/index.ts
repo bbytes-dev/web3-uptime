@@ -1,124 +1,212 @@
-import { randomUUIDv7 } from "bun";
-import {
-  type OutgoingMessage,
-  type SignupOutgoingMessage,
-  type ValidateOutgoingMessage,
-} from "common";
 import { Keypair } from "@solana/web3.js";
+import { WebSocket } from "ws";
 import nacl from "tweetnacl";
-import nacl_util from "tweetnacl-util";
+import chalk from "chalk";
+import ora from "ora";
+import boxen from "boxen";
+import net from "net";
+import { 
+  type ValidateOutgoingMessage, 
+  type SignupIncomingMessage, 
+} from "common";
 
-const CALLBACKS: {
-  [callbackId: string]: (data: SignupOutgoingMessage) => void;
-} = {};
+// --- CONFIGURATION ---
+const HUB_URL = process.env.HUB_URL || "ws://localhost:8080";
+const PRIVATE_KEY_STR = process.env.PRIVATE_KEY;
 
+let keypair: Keypair;
 let validatorId: string | null = null;
+let checksPerformed = 0;
+let totalEarnings = 0;
+let heartbeatTimer: NodeJS.Timeout;
 
-async function main() {
-  const FALLBACK_SECRET = Uint8Array.from([
-    102, 33, 44, 12, 99, 120, 222, 101, 88, 77, 66, 55, 44, 33, 22, 11, 99, 88,
-    77, 66, 55, 44, 33, 22, 11, 201, 104, 105, 106, 107, 108, 109,
-  ]);
-  const keypair = process.env.PRIVATE_KEY
-    ? Keypair.fromSecretKey(
-        Uint8Array.from(JSON.parse(process.env.PRIVATE_KEY)),
-      )
-    : Keypair.fromSeed(FALLBACK_SECRET);
+// --- INITIALIZATION ---
+async function init() {
+  console.clear();
+  console.log(
+    boxen(
+      `${chalk.cyan.bold("WEB3 UPTIME")}\n${chalk.white("Professional Validator Agent v1.1.0")}\n\n${chalk.gray("Decentralized Network Health Infrastructure")}`,
+      {
+        padding: 1,
+        margin: 1,
+        borderStyle: "double",
+        borderColor: "cyan",
+        textAlignment: "center",
+      }
+    )
+  );
 
-  console.log(`Validator Agent Node initializing...`);
-  console.log(`Node Public Verification Key: ${keypair.publicKey.toBase58()}`);
-  const ws = new WebSocket("ws://localhost:8081");
+  const spinner = ora("Booting validator engine...").start();
 
-  ws.onmessage = async (event) => {
-    const data: OutgoingMessage = JSON.parse(event.data);
-    if (data.type === "signup") {
-      CALLBACKS[data.data.callbackId]?.(data.data);
-      delete CALLBACKS[data.data.callbackId];
-    } else if (data.type === "validate") {
-      await validateHandler(ws, data.data, keypair);
+  try {
+    if (!PRIVATE_KEY_STR) {
+      spinner.fail(chalk.red("Configuration Error"));
+      console.log(chalk.yellow("\nMissing PRIVATE_KEY in environment."));
+      console.log(chalk.gray("Please add your Solana private key array to .env:\n"));
+      console.log(chalk.white("PRIVATE_KEY=[1,2,3...]\n"));
+      process.exit(1);
     }
-  };
 
-  ws.onopen = async () => {
-    const callbackId = randomUUIDv7();
-    CALLBACKS[callbackId] = (data: SignupOutgoingMessage) => {
-      validatorId = data.validatorId;
-    };
-    const signedMessage = await signMessage(
-      `Signed message for ${callbackId}, ${keypair.publicKey.toBase58()}`,
-      keypair,
-    );
+    const secretKey = new Uint8Array(JSON.parse(PRIVATE_KEY_STR));
+    keypair = Keypair.fromSecretKey(secretKey);
+    
+    spinner.succeed(chalk.green("Validator Engine Ready"));
+    console.log(`${chalk.cyan("▶ Public Key:")} ${chalk.white(keypair.publicKey.toBase58())}`);
+    console.log(`${chalk.cyan("▶ Hub URL:")}    ${chalk.white(HUB_URL)}\n`);
 
-    ws.send(
-      JSON.stringify({
-        type: "signup",
-        data: {
-          callbackId,
-          ip: "127.0.0.1",
-          publicKey: keypair.publicKey.toBase58(),
-          signedMessage,
-        },
-      }),
-    );
-  };
+    connectToHub();
+  } catch (err) {
+    spinner.fail(chalk.red("Engine Initialization Failed"));
+    console.error(err);
+    process.exit(1);
+  }
 }
 
-async function validateHandler(
-  ws: WebSocket,
-  { url, callbackId, websiteId }: ValidateOutgoingMessage,
-  keypair: Keypair,
-) {
-  console.log(`Validating ${url}`);
-  const startTime = Date.now();
+// --- NETWORK LOGIC ---
+function connectToHub() {
+  const spinner = ora(chalk.gray("Connecting to Hub...")).start();
+  const ws = new WebSocket(HUB_URL);
+
+  ws.on("open", async () => {
+    spinner.succeed(chalk.green("Active on Network"));
+    
+    // Auto-detect IP/Location
+    let ip = "unknown";
+    try {
+      const ipRes = await fetch("https://api.ipify.org?format=json");
+      const ipData: any = await ipRes.json();
+      ip = ipData.ip;
+    } catch {}
+
+    // Register node with cryptographic proof
+    const signupData: SignupIncomingMessage = {
+      type: "signup",
+      publicKey: keypair.publicKey.toBase58(),
+      ip: ip,
+      signedMessage: await signMessage(keypair.publicKey.toBase58(), keypair),
+      callbackId: `reg_${Date.now()}`,
+    };
+    ws.send(JSON.stringify(signupData));
+
+    // Start Heartbeat
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      }
+    }, 30000);
+  });
+
+  ws.on("message", (data: string) => {
+    try {
+      const payload = JSON.parse(data);
+      handleHubMessage(ws, payload);
+    } catch (err) {
+      // Ignore non-json
+    }
+  });
+
+  ws.on("close", () => {
+    console.log(chalk.yellow("\n⚠ Connection dropped. Attempting recovery..."));
+    setTimeout(connectToHub, 5000);
+  });
+}
+
+async function handleHubMessage(ws: WebSocket, payload: any) {
+  if (payload.type === "signup") {
+    validatorId = payload.data.validatorId;
+    console.log(chalk.green(`\n✔ Registration Confirmed | Node ID: ${chalk.white(validatorId.slice(0, 8))}`));
+    console.log(chalk.gray("--------------------------------------------------"));
+    console.log(chalk.cyan("Listening for incoming validation tasks...\n"));
+  } else if (payload.type === "validate") {
+    await performValidationTask(ws, payload.data);
+  }
+}
+
+async function performValidationTask(ws: WebSocket, data: ValidateOutgoingMessage) {
+  const { url, callbackId, websiteId } = data;
+  const checkSpinner = ora(`${chalk.gray("Validating")} ${chalk.white(url)}`).start();
+  
   const signature = await signMessage(`Replying to ${callbackId}`, keypair);
 
   try {
-    const response = await fetch(url);
-    const endTime = Date.now();
-    const latency = endTime - startTime;
-    const status = response.status;
+    // Pro Feature: Measure pure TCP latency instead of high-level fetch
+    const { latency, status } = await measureAccuracy(url);
 
-    console.log(url);
-    console.log(status);
+    const isGood = status >= 200 && status < 300;
+    
     ws.send(
       JSON.stringify({
         type: "validate",
         data: {
           callbackId,
-          status: status === 200 ? "Good" : "Bad",
+          status: isGood ? "Good" : "Bad",
           latency,
           websiteId,
           validatorId,
           signedMessage: signature,
         },
-      }),
+      })
     );
-    console.log(`Reported status: ${status} | Latency: ${latency}ms`);
-  } catch (error) {
-    ws.send(
-      JSON.stringify({
-        type: "validate",
-        data: {
-          callbackId,
-          status: "Bad",
-          latency: 1000,
-          websiteId,
-          validatorId,
-          signedMessage: signature,
-        },
-      }),
-    );
-    console.error(error);
+
+    checksPerformed++;
+    totalEarnings += 0.0001;
+
+    if (isGood) {
+      checkSpinner.succeed(`${chalk.green("UP")}   | ${chalk.white(url.padEnd(30))} | ${chalk.cyan(latency + "ms")}`);
+    } else {
+      checkSpinner.fail(`${chalk.red("DOWN")} | ${chalk.white(url.padEnd(30))} | ${chalk.red("Err: " + status)}`);
+    }
+
+    updateLiveDashboard();
+  } catch (err) {
+    checkSpinner.fail(chalk.red(`System error during validation: ${url}`));
   }
 }
 
-async function signMessage(message: string, keypair: Keypair) {
-  const messageBytes = nacl_util.decodeUTF8(message);
-  const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+async function measureAccuracy(targetUrl: string): Promise<{ latency: number; status: number }> {
+  const startTime = Date.now();
+  try {
+    const url = new URL(targetUrl);
+    const port = url.port || (url.protocol === "https:" ? 443 : 80);
+    
+    // 1. First measure raw TCP handshake latency (Industry Standard)
+    await new Promise((resolve, reject) => {
+      const socket = net.connect(Number(port), url.hostname, () => {
+        socket.end();
+        resolve(true);
+      });
+      socket.setTimeout(3000);
+      socket.on("timeout", () => { socket.destroy(); reject(new Error("timeout")); });
+      socket.on("error", reject);
+    });
 
-  return JSON.stringify(Array.from(signature));
+    const tcpLatency = Date.now() - startTime;
+
+    // 2. Then check HTTP status for sanity
+    const res = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) });
+    return { latency: tcpLatency, status: res.status };
+  } catch (err) {
+    return { latency: Date.now() - startTime, status: 0 };
+  }
 }
 
-main();
+function updateLiveDashboard() {
+  process.stdout.write(
+    `\r${chalk.cyan.bold("STATS:")} ${chalk.white(checksPerformed)} validations | ${chalk.yellow(totalEarnings.toFixed(4) + " SOL")} earned | ${chalk.green("Status: Active")}`
+  );
+}
 
-setInterval(async () => {}, 10000);
+async function signMessage(message: string, keypair: Keypair) {
+  const encoder = new TextEncoder();
+  const messageBytes = encoder.encode(message);
+  const signature = nacl.sign.detached(messageBytes, keypair.secretKey);
+  return Buffer.from(signature).toString("base64");
+}
+
+process.on("SIGINT", () => {
+  console.log(chalk.yellow("\n\nDisconnecting from network..."));
+  process.exit();
+});
+
+init();

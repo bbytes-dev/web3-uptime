@@ -84,6 +84,12 @@ export default function RootLayout({
                   How It Works
                 </Link>
                 <Link
+                  href="/validator"
+                  className="text-[13px] font-medium text-zinc-500 transition-colors hover:text-white"
+                >
+                  Validators
+                </Link>
+                <Link
                   href="/dashboard"
                   className="text-[13px] font-medium text-zinc-500 transition-colors hover:text-white"
                 >

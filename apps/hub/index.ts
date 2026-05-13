@@ -247,7 +247,15 @@ async function processDevnetPayouts() {
 
     for (const v of eligibleValidators) {
       try {
-        const destPubkey = new PublicKey(v.publicKey);
+        // Validate public key before processing
+        let destPubkey: PublicKey;
+        try {
+          destPubkey = new PublicKey(v.publicKey);
+        } catch (e) {
+          console.error(`Invalid public key for node ${v.id}: ${v.publicKey}. Skipping payout.`);
+          continue;
+        }
+
         const lamports = v.pendingPayouts * 100000;
 
         const tx = new Transaction().add(
@@ -263,24 +271,27 @@ async function processDevnetPayouts() {
           const balance = await solanaConnection.getBalance(
             hubKeypair.publicKey,
           );
-          if (balance > lamports + 5000) {
+
+          if (balance >= lamports + 5000) {
             txSig = await sendAndConfirmTransaction(solanaConnection, tx, [
               hubKeypair,
             ]);
             console.log(
-              `On-Chain Devnet Payout Confirmed! Signature: ${txSig}`,
+              `Payout successful for node ${v.publicKey.slice(
+                0,
+                8,
+              )}... | Tx: ${txSig}`,
             );
           } else {
-            console.log(
+            console.warn(
               `Hub Devnet balance low (${(balance / 1e9).toFixed(
                 4,
               )} SOL). Using simulated crypto signature to guarantee tracking proof. Top up at faucet.solana.com!`,
             );
           }
-        } catch (chainErr: any) {
-          console.warn(
-            `Solana Devnet broadcast notice (Network congestion/RPC constraint). Recording fallback claim signature.`,
-          );
+        } catch (txErr) {
+          console.error(`Devnet transaction failed for node ${v.id}:`, txErr);
+          // Fallback to simulation if cluster is congested but proof is needed
         }
 
         await prismaClient.$transaction(async (dbTx) => {
@@ -292,14 +303,14 @@ async function processDevnetPayouts() {
               lastPayoutTx: txSig,
             },
           });
-        });
 
-        console.log(
-          ` Yield successfully distributed to node ${v.publicKey.slice(
-            0,
-            8,
-          )}...`,
-        );
+          console.log(
+            ` Yield successfully distributed to node ${v.publicKey.slice(
+              0,
+              8,
+            )}...`,
+          );
+        });
       } catch (nodeErr) {
         console.error(`Failed devnet transfer for node ${v.id}:`, nodeErr);
       }
