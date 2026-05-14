@@ -69,16 +69,21 @@ Bun.serve({
         const payload: IncomingMessage = JSON.parse(message.toString());
 
         if (payload.type === "signup") {
-          const verified = await verifyMessage(
-            `Signed message for ${payload.data.callbackId}, ${payload.data.publicKey}`,
-            payload.data.publicKey,
-            payload.data.signedMessage,
-          );
-          console.log("verification started ----");
-          if (verified) {
-            await handleSignup(ws, payload.data);
+          const signupData = payload as any;
+          if (!signupData.callbackId || !signupData.publicKey) {
+            console.warn("Received malformed signup message");
+            return;
           }
-        } else if (payload.type === "validate") {
+          const verified = await verifyMessage(
+            `Signed message for ${signupData.callbackId}, ${signupData.publicKey}`,
+            signupData.publicKey,
+            signupData.signedMessage,
+          );
+          console.log("Handshake verification started ----");
+          if (verified) {
+            await handleSignup(ws, signupData);
+          }
+        } else if (payload.type === "validate" && payload.data) {
           const callbackId = payload.data.callbackId;
           if (CALLBACKS[callbackId]) {
             CALLBACKS[callbackId](payload);
@@ -164,7 +169,7 @@ async function handleSignup(
 function verifyMessage(message: string, publicKey: string, signature: string) {
   const messageBytes = nacl_util.decodeUTF8(message);
   const publicKeyBytes = bs58.decode(publicKey);
-  const signatureBytes = new Uint8Array(JSON.parse(signature));
+  const signatureBytes = bs58.decode(signature);
 
   return nacl.sign.detached.verify(
     messageBytes,
@@ -252,7 +257,9 @@ async function processDevnetPayouts() {
         try {
           destPubkey = new PublicKey(v.publicKey);
         } catch (e) {
-          console.error(`Invalid public key for node ${v.id}: ${v.publicKey}. Skipping payout.`);
+          console.error(
+            `Invalid public key for node ${v.id}: ${v.publicKey}. Skipping payout.`,
+          );
           continue;
         }
 

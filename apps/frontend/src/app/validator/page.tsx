@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import axios from "axios";
 import { API_URL } from "@/lib/constants";
+import createGlobe from "cobe";
 
 interface ValidatorData {
   id: string;
@@ -14,19 +15,18 @@ interface ValidatorData {
   _count: { ticks: number };
 }
 
-// Simple coordinate mapping for common locations
-const LOCATION_MAP: Record<string, { x: number; y: number }> = {
-  "New York, US": { x: 25, y: 35 },
-  "London, UK": { x: 47, y: 28 },
-  "Frankfurt, DE": { x: 49, y: 30 },
-  "Singapore, SG": { x: 78, y: 65 },
-  "Tokyo, JP": { x: 88, y: 38 },
-  "San Francisco, US": { x: 15, y: 38 },
-  "Mumbai, IN": { x: 72, y: 55 },
-  "Bengaluru, IN": { x: 72, y: 58 },
-  "Sydney, AU": { x: 88, y: 82 },
-  "Paris, FR": { x: 47, y: 32 },
-  "Toronto, CA": { x: 22, y: 32 },
+const LOCATION_MAP: Record<string, { lat: number; lng: number }> = {
+  "New York, US": { lat: 40.7128, lng: -74.006 },
+  "London, UK": { lat: 51.5074, lng: -0.1278 },
+  "Frankfurt, DE": { lat: 50.1109, lng: 8.6821 },
+  "Singapore, SG": { lat: 1.3521, lng: 103.8198 },
+  "Tokyo, JP": { lat: 35.6762, lng: 139.6503 },
+  "San Francisco, US": { lat: 37.7749, lng: -122.4194 },
+  "Mumbai, IN": { lat: 19.076, lng: 72.8777 },
+  "Bengaluru, IN": { lat: 12.9716, lng: 77.5946 },
+  "Sydney, AU": { lat: -33.8688, lng: 151.2093 },
+  "Paris, FR": { lat: 48.8566, lng: 2.3522 },
+  "Toronto, CA": { lat: 43.6532, lng: -79.3832 },
 };
 
 export default function ValidatorPage() {
@@ -39,18 +39,18 @@ export default function ValidatorPage() {
         const res = await axios.get(`${API_URL}/api/v1/validators`);
         setValidators(res.data);
       } catch (err) {
-        console.error("Failed to fetch validators:", err);
+        console.warn("Could not load validator data. Retrying...");
       }
     };
     fetchData();
-    const i = setInterval(fetchData, 15000);
+    const i = setInterval(fetchData, 10000);
     return () => clearInterval(i);
   }, []);
 
   const stats = useMemo(() => {
-    const activeCount = validators.filter((v) => v.isActive).length;
-    const totalChecks = validators.reduce((a, v) => a + (v._count?.ticks || 0), 0);
-    const totalEarned = validators.reduce((a, v) => a + (v.totalPayouts || 0), 0) * 0.0001;
+    const activeCount = (validators || []).filter((v) => v.isActive).length;
+    const totalChecks = (validators || []).reduce((a, v) => a + (v._count?.ticks || 0), 0);
+    const totalEarned = (validators || []).reduce((a, v) => a + (v.totalPayouts || 0), 0) * 0.0001;
     return { activeCount, totalChecks, totalEarned };
   }, [validators]);
 
@@ -61,13 +61,13 @@ export default function ValidatorPage() {
   };
 
   return (
-    <div className="relative overflow-hidden bg-grid min-h-screen">
+    <div className="relative overflow-hidden bg-[#050510] min-h-screen">
       <div className="hero-glow top-[-250px] left-1/2 -translate-x-1/2" />
 
       {/* ═══ HERO ═══ */}
       <section className="relative mx-auto max-w-7xl px-6 pt-24 pb-8 sm:pt-32">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="max-w-xl">
+          <div className="max-w-xl z-10">
             <div className="anim-fade-up inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2 mb-8">
               <span className="h-2 w-2 rounded-full bg-blue-500 anim-pulse-slow" />
               <span className="text-[13px] text-zinc-400 font-medium">
@@ -88,21 +88,21 @@ export default function ValidatorPage() {
               <a href="#setup" className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-500/20">
                 Get started
               </a>
-              <a href="https://github.com" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
-                View documentation →
+              <a href="https://github.com/bbytes-dev/web3-uptime-validator-cli" target="_blank" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                View CLI Repo →
               </a>
             </div>
           </div>
 
-          {/* ═══ ANIMATED GLOBE ═══ */}
-          <div className="anim-fade-up-d4 relative aspect-square max-w-[500px] mx-auto lg:mx-0 w-full flex items-center justify-center">
+          {/* ═══ ANIMATED 3D GLOBE ═══ */}
+          <div className="anim-fade-up-d4 relative aspect-square max-w-[600px] mx-auto lg:mx-0 w-full flex items-center justify-center">
             <GlobeVisualization validators={validators} />
           </div>
         </div>
       </section>
 
       {/* ═══ LIVE NETWORK STATS ═══ */}
-      <section className="border-y border-white/[0.04] bg-[#08081a]/80 backdrop-blur-sm mt-12">
+      <section className="border-y border-white/[0.04] bg-[#08081a]/80 backdrop-blur-sm mt-12 z-10 relative">
         <div className="mx-auto max-w-7xl px-6 py-10 grid grid-cols-2 sm:grid-cols-4 gap-8">
           <MetricSmall value={stats.activeCount.toString()} label="Active nodes" />
           <MetricSmall value={stats.totalChecks.toLocaleString()} label="Total checks" />
@@ -112,27 +112,27 @@ export default function ValidatorPage() {
       </section>
 
       {/* ═══ SETUP STEPS ═══ */}
-      <section id="setup" className="mx-auto max-w-7xl px-6 py-28">
+      <section id="setup" className="mx-auto max-w-7xl px-6 py-28 relative z-10">
         <div className="text-center mb-16">
           <p className="text-sm font-semibold text-blue-400 tracking-wider uppercase mb-3">Setup Guide</p>
           <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Node deployment</h2>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <SetupStep n="01" title="Clone" code="git clone https://github.com/web3-uptime/validator" onCopy={copyToClipboard} copied={copied === "git clone https://github.com/web3-uptime/validator"} />
+          <SetupStep n="01" title="Clone Repo" code="git clone https://github.com/bbytes-dev/web3-uptime-validator-cli" onCopy={copyToClipboard} copied={copied === "git clone https://github.com/bbytes-dev/web3-uptime-validator-cli"} />
           <SetupStep n="02" title="Install" code="bun install" onCopy={copyToClipboard} copied={copied === "bun install"} />
-          <SetupStep n="03" title="Config" code="echo 'PRIVATE_KEY=[...]' > .env" onCopy={copyToClipboard} copied={copied === "echo 'PRIVATE_KEY=[...]' > .env"} />
-          <SetupStep n="04" title="Launch" code="bun run index.ts" onCopy={copyToClipboard} copied={copied === "bun run index.ts"} />
+          <SetupStep n="03" title="Config" code="cp .env.example .env" onCopy={copyToClipboard} copied={copied === "cp .env.example .env"} />
+          <SetupStep n="04" title="Activate" code="bun start" onCopy={copyToClipboard} copied={copied === "bun start"} />
         </div>
       </section>
 
       {/* ═══ ACTIVE NODES GRID ═══ */}
-      <section className="border-t border-white/[0.04] pb-32">
+      <section className="border-t border-white/[0.04] pb-32 relative z-10">
         <div className="mx-auto max-w-7xl px-6 py-24">
           <h3 className="font-display text-2xl font-bold mb-10">Active validators</h3>
           {validators.length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-white/[0.08] rounded-2xl">
-              <p className="text-zinc-500">No active validators found. Be the first to join.</p>
+            <div className="text-center py-20 border border-dashed border-white/[0.08] rounded-2xl bg-white/[0.02]">
+              <p className="text-zinc-500">Connecting to network...</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -148,47 +148,46 @@ export default function ValidatorPage() {
 }
 
 function GlobeVisualization({ validators }: { validators: ValidatorData[] }) {
-  return (
-    <div className="relative w-full h-full">
-      {/* Abstract World Map SVG */}
-      <svg viewBox="0 0 100 100" className="w-full h-full opacity-20 text-blue-500/50" fill="currentColor">
-        <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="0.2" />
-        <circle cx="50" cy="50" r="35" fill="none" stroke="currentColor" strokeWidth="0.1" />
-        <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="0.1" />
-        <path d="M50 2 L50 98 M2 50 L98 50" stroke="currentColor" strokeWidth="0.1" />
-        
-        {/* Simple Map Dots (Pseudo-map) */}
-        <circle cx="20" cy="35" r="0.5" /><circle cx="25" cy="40" r="0.5" />
-        <circle cx="45" cy="30" r="0.5" /><circle cx="50" cy="35" r="0.5" />
-        <circle cx="75" cy="60" r="0.5" /><circle cx="85" cy="45" r="0.5" />
-        <circle cx="15" cy="50" r="0.5" /><circle cx="80" cy="75" r="0.5" />
-      </svg>
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-      {/* Orbiting Ring */}
-      <div className="absolute inset-0 border border-blue-500/10 rounded-full animate-[spin_20s_linear_infinite]" />
-      
-      {/* Active Validator Pins */}
-      {validators.map((v, i) => {
-        const coords = LOCATION_MAP[v.location] || { 
-          x: 20 + Math.random() * 60, 
-          y: 20 + Math.random() * 60 
-        };
-        return (
-          <div
-            key={v.id}
-            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2"
-            style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
-          >
-            <span className="absolute inset-0 rounded-full bg-cyan-400 animate-ping opacity-75" style={{ animationDelay: `${i * 0.5}s` }} />
-            <span className="relative block h-1.5 w-1.5 mx-auto mt-[3px] rounded-full bg-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
-            
-            {/* Hover Tooltip */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 opacity-0 hover:opacity-100 transition-opacity bg-black/80 backdrop-blur-md border border-white/10 rounded px-2 py-1 whitespace-nowrap pointer-events-none z-10">
-              <p className="text-[10px] font-mono text-cyan-400">{v.location}</p>
-            </div>
-          </div>
-        );
-      })}
+  useEffect(() => {
+    let phi = 0;
+    if (!canvasRef.current) return;
+
+    const globe = createGlobe(canvasRef.current, {
+      devicePixelRatio: 2,
+      width: 600 * 2,
+      height: 600 * 2,
+      phi: 0,
+      theta: 0,
+      dark: 1,
+      diffuse: 1.2,
+      mapSamples: 16000,
+      mapBrightness: 10,
+      baseColor: [0.1, 0.1, 0.3], 
+      markerColor: [0.1, 0.8, 1],    
+      glowColor: [0.3, 0.3, 0.7],    // Brighter glow
+      markers: (validators || []).map((v) => {
+        const coords = LOCATION_MAP[v.location] || { lat: 0, lng: 0 };
+        return { location: [coords.lat, coords.lng], size: 0.08 };
+      }),
+      onRender: (state) => {
+        state.phi = phi;
+        phi += 0.005;
+      },
+    });
+
+    return () => globe.destroy();
+  }, [validators]);
+
+  return (
+    <div className="relative flex items-center justify-center w-full h-full min-h-[500px]">
+      <div className="absolute inset-0 bg-radial-glow opacity-40 pointer-events-none" />
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full max-w-[600px] max-h-[600px] aspect-square"
+        style={{ cursor: 'grab', opacity: 1, visibility: 'visible' }}
+      />
     </div>
   );
 }
@@ -204,11 +203,11 @@ function MetricSmall({ value, label }: { value: string; label: string }) {
 
 function SetupStep({ n, title, code, onCopy, copied }: { n: string; title: string; code: string; onCopy: (c: string, n: string) => void; copied: boolean }) {
   return (
-    <div className="group rounded-xl border border-white/[0.06] bg-[#0a0a1a] p-6 transition-all hover:border-blue-500/20">
+    <div className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 transition-all hover:border-blue-500/20">
       <span className="font-mono text-xs text-zinc-700 mb-2 block">{n}</span>
       <h4 className="font-display font-semibold text-white mb-4">{title}</h4>
       <div className="relative">
-        <code className="block bg-[#050510] border border-white/[0.04] rounded p-3 text-[11px] font-mono text-zinc-500 truncate group-hover:text-zinc-300 transition-colors">
+        <code className="block bg-black/40 border border-white/[0.04] rounded p-3 text-[11px] font-mono text-zinc-500 truncate group-hover:text-zinc-300 transition-colors">
           {code}
         </code>
         <button
@@ -228,7 +227,7 @@ function SetupStep({ n, title, code, onCopy, copied }: { n: string; title: strin
 
 function ValidatorCard({ v }: { v: ValidatorData }) {
   return (
-    <div className="card-glow rounded-2xl border border-white/[0.06] bg-[#0a0a1a] p-5">
+    <div className="card-glow rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className={`h-1.5 w-1.5 rounded-full ${v.isActive ? "bg-blue-500" : "bg-zinc-700"}`} />
